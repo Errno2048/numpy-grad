@@ -155,6 +155,23 @@ class Tensor:
         res._grad_calculator = AddGrad(self, other)
         return res
 
+    def __radd__(self, other):
+        return self + other
+
+    def __rsub__(self, other):
+        return -self + other
+
+    def __rmul__(self, other):
+        return self * other
+
+    def __rtruediv__(self, other):
+        other = self._ensure_tensor(other)
+        return other / self
+
+    def __rmatmul__(self, other):
+        other = self._ensure_tensor(other)
+        return other @ self
+
     def __sub__(self, other):
         other = self._ensure_tensor(other)
         new_other = Tensor(-other._value, requires_grad=other._requires_grad)
@@ -188,6 +205,10 @@ class Tensor:
         res = Tensor(res, requires_grad=self._requires_grad or other._requires_grad)
         res._grad_calculator = PowGrad(self, other)
         return res
+
+    def __rpow__(self, other, modulo=None):
+        other = self._ensure_tensor(other)
+        return other ** self
 
     def __pos__(self):
         res = Tensor(self._value, requires_grad=self._requires_grad)
@@ -251,6 +272,17 @@ class Tensor:
         res = Tensor(value, requires_grad=self._requires_grad)
         res._grad_calculator = MeanGrad(self, dim, keepdim)
         return res
+
+    def var(self, dim, unbiased=True, keepdim=False):
+        res = (self - self.mean(dim, keepdim=True)).sum(dim, keepdim=keepdim)
+        if unbiased:
+            res = res / (res._value.size - 1)
+        else:
+            res = res / res._value.size
+        return res
+
+    def std(self, dim, unbiased=True, keepdim=False):
+        return self.var(dim, unbiased=unbiased, keepdim=keepdim) ** 0.5
 
     def max(self, dim=None, keepdim=False):
         if dim is None:

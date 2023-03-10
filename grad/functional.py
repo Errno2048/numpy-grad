@@ -18,7 +18,19 @@ def _calculate_fan_in_and_fan_out(tensor : Tensor):
 
     return fan_in, fan_out
 
-def xavier_uniform(tensor : Tensor, gain : float = 1.0):
+def uniform_(tensor : Tensor, low, high):
+    tensor.zero_grad()
+    new_value = np.random.uniform(low, high, size=tensor.shape)
+    tensor._value = new_value
+    return tensor
+
+def normal_(tensor : Tensor, mean, std):
+    tensor.zero_grad()
+    new_value = np.random.normal(mean, std, size=tensor.shape)
+    tensor._value = new_value
+    return tensor
+
+def xavier_uniform_(tensor : Tensor, gain : float = 1.0):
     fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
     std = gain * math.sqrt(2.0 / float(fan_in + fan_out))
     a = math.sqrt(3.0) * std  # Calculate uniform bounds from standard deviation
@@ -28,7 +40,7 @@ def xavier_uniform(tensor : Tensor, gain : float = 1.0):
     tensor._value = new_value
     return tensor
 
-def xavier_normal(tensor : Tensor, gain : float = 1.0):
+def xavier_normal_(tensor : Tensor, gain : float = 1.0):
     fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor)
     std = gain * math.sqrt(2.0 / float(fan_in + fan_out))
 
