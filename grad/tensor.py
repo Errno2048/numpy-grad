@@ -350,9 +350,9 @@ def _gather_indices(value, dim, index):
     expand = list(range(1, value.ndim))
     for i in range(value.ndim):
         if i == dim:
-            indices.append(index)
+            indices.append(index.astype(np.int_))
         else:
-            indices.append(np.expand_dims(np.arange(value.shape[i]), expand))
+            indices.append(np.expand_dims(np.arange(value.shape[i], dtype=np.int_), expand))
         if i < value.ndim - 1:
             expand[i] = i
     return tuple(indices)

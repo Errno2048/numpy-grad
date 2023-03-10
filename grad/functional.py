@@ -75,10 +75,13 @@ def cross_entropy(input, target, dim=-1, *, reduction='mean', target_type='indic
     else:
         # indices
         _target = Tensor.zeros_like(input)
-        target = _target.gather_merge(1, dim, target)
-    res = -(target * q.log())
+        target = _target.gather_merge(1, dim, target.unsqueeze(-1))
+        print(target)
+    res = -(target * q.log()).sum(dim=dim)
     if reduction == 'sum':
         res = res.sum()
-    else:
+    elif reduction == 'mean':
         res = res.mean()
+    else:
+        pass
     return res
