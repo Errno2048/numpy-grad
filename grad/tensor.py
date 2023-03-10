@@ -263,10 +263,39 @@ class Tensor:
         res._grad_calculator = MaxGrad(self, dim, keepdim)
         return res
 
+    def min(self, dim=None, keepdim=False):
+        return -(-self).max(dim=dim, keepdim=keepdim)
+
+    def argmax(self, dim=None, keepdim=False):
+        return Tensor(np.argmax(self._value, axis=dim, keepdims=keepdim), requires_grad=False)
+
+    def argmin(self, dim=None, keepdim=False):
+        return Tensor(np.argmin(self._value, axis=dim, keepdims=keepdim), requires_grad=False)
+
     def reshape(self, *shape):
         res = np.reshape(self._value, shape)
         res = Tensor(res, requires_grad=self._requires_grad)
         res._grad_calculator = ReshapeGrad(self)
+        return res
+
+    def squeeze(self, dim):
+        res = np.squeeze(self._value, dim)
+        res = Tensor(res, requires_grad=self._requires_grad)
+        res._grad_calculator = ReshapeGrad(self)
+        return res
+
+    def unsqueeze(self, dim):
+        res = np.expand_dims(self._value, dim)
+        res = Tensor(res, requires_grad=self._requires_grad)
+        res._grad_calculator = ReshapeGrad(self)
+        return res
+
+    def permute(self, *dims):
+        if len(dims) == 0:
+            dims = tuple(range(-1, -self._value.ndim - 1, -1))
+        res = np.transpose(self._value, dims)
+        res = Tensor(res, requires_grad=self._requires_grad)
+        res._grad_calculator = PermuteGrad(self, dims)
         return res
 
     def clip(self, min=None, max=None):
@@ -278,6 +307,20 @@ class Tensor:
         res = Tensor(res, requires_grad=self._requires_grad)
         res._grad_calculator = ClipGrad(self, min, max)
         return res
+
+    def gather(self, dim, index):
+        index = self._ensure_tensor(index)
+        dim = dim % self._value.ndim
+        indices = []
+        expand = list(range(1, self._value.ndim))
+        for i in range(self._value.ndim):
+            if i == dim:
+                indices.append(index._value)
+            else:
+                indices.append(np.expand_dims(np.arange(self.shape[i]), expand))
+            if i < self._value.ndim - 1:
+                expand[i] = i
+        return self[tuple(indices)]
 
     def to_list(self):
         return self._value.tolist()
@@ -398,6 +441,22 @@ class ReshapeGrad(UnaryGrad):
         if self.a._requires_grad:
             self.a._grad += np.reshape(parent._grad, self.a._value.shape)
 
+def _inverse_permute(permute):
+    res = [None for i in range(len(permute))]
+    for i, p in enumerate(permute):
+        res[i] = p
+    return tuple(res)
+
+class PermuteGrad(UnaryGrad):
+    def __init__(self, a, permute):
+        super().__init__(a)
+        self._permute = permute
+        self._inv = _inverse_permute(permute)
+
+    def back(self, parent : Tensor):
+        if self.a._requires_grad:
+            self.a._grad += np.transpose(parent._grad, self._inv)
+
 class AbsGrad(UnaryGrad):
     def back(self, parent : Tensor):
         if self.a._requires_grad:
@@ -469,11 +528,11 @@ class MaxGrad(AggrGrad):
             if self.dim is None:
                 mask = np.zeros_like(self.a._value)
                 max_index = self.a._value.argmax()
-                indexes = []
+                indices = []
                 for shape in reversed(self.a._value.shape):
-                    indexes.append(max_index % shape)
+                    indices.append(max_index % shape)
                     max_index //= shape
-                mask[(*reversed(indexes),)] = 1
+                mask[(*reversed(indices),)] = 1
                 self.a._grad += parent._grad * mask
             else:
                 value = parent._grad
