@@ -1,6 +1,8 @@
 # numpy-grad
  A toy deep learning tool for homework.
 
+I'm seeking for a method to implement convolutions without the terribly slow for loops in python. (It seems that `numpy.lib.stride_tricks.as_strided` helps to convert the problem to simply doing production, but stride and dilation are difficult to implement. Are there better ideas?)
+
 ```python
 from grad.tensor import Tensor
 from grad.model import Linear, ReLU, Sequential, Module
