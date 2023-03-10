@@ -8,7 +8,7 @@ from grad.optim import Optimizer
 from grad.random import uniform, normal
 
 class Model(Module):
-    def __init__():
+    def __init__(self):
         super().__init__()
         self.model = Sequential(
             Linear(10, 20),
@@ -17,7 +17,7 @@ class Model(Module):
         )
         self.register("model")
     
-    def __call__(input):
+    def __call__(self, input):
         return self.model(input)
 
 model = Model()
