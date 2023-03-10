@@ -162,3 +162,128 @@ torch_tensor.backward()
 
 print(t_a.grad.numpy() - ts_a._grad)
 print(t_b.grad.numpy() - ts_b._grad)
+
+a = np.random.random((10, 50, 30, 20))
+b = np.random.random((50, 40))
+ts_a = ts.Tensor(a, requires_grad=True)
+ts_b = ts.Tensor(b, requires_grad=True)
+t_a = torch.tensor(a, requires_grad=True)
+t_b = torch.tensor(b, requires_grad=True)
+ts_a0 = ts_a.permute(0, -1, 2, 1)
+t_a0 = t_a.permute(0, -1, 2, 1)
+ts_a1 = ts_a0.gather(0, ts_a0.argmax(0, keepdim=True)).squeeze(0)
+t_a1 = t_a0.gather(0, t_a0.argmax(0, keepdim=True)).squeeze(0)
+print(ts_a1.shape, t_a1.shape)
+ts_tensor = (ts_a1[:, :, 10:20] @ ts_b[20:30]).clip(0.1, 0.6).max(dim=-1).mean()
+torch_tensor = (t_a1[:, :, 10:20] @ t_b[20:30]).clip(0.1, 0.6).max(dim=-1).values.mean()
+
+print(torch_tensor.detach().numpy() - ts_tensor._value)
+
+ts_tensor.backward()
+torch_tensor.backward()
+
+print(t_a.grad.numpy() - ts_a._grad)
+print(t_b.grad.numpy() - ts_b._grad)
+
+a = np.random.random((2,3,5))
+ts_a = ts.Tensor(a, requires_grad=True)
+ts_b = ts.Tensor.zeros_like(ts_a)
+ts_b1 = ts_b.gather_merge(1, -1, ts_a.argmax(-1, keepdim=True))
+print(ts_b1)
+
+a = np.random.random((20, 10))
+b = np.zeros((20))
+b[0] = 1
+ts_a = ts.Tensor(a, requires_grad=True)
+ts_b = ts.Tensor(b)
+t_a = torch.tensor(a, requires_grad=True)
+t_b = torch.tensor(b, dtype=torch.long)
+ts_tensor = F.cross_entropy(ts_a, ts_b, dim=-1)
+torch_tensor = torch.nn.functional.cross_entropy(t_a, t_b)
+
+ts_tensor.backward()
+torch_tensor.backward()
+print(torch_tensor)
+print(ts_tensor)
+
+print(t_a.grad.numpy() / ts_a._grad)
+
+a = np.random.random((10, 10))
+b = np.zeros((10, 10))
+b[:, 0] = 1
+ts_a = ts.Tensor(a, requires_grad=True)
+ts_b = ts.Tensor(b)
+t_a = torch.tensor(a, requires_grad=True)
+t_b = torch.tensor(b)
+ts_tensor = F.cross_entropy(ts_a, ts_b.argmax(dim=-1), dim=-1)
+#torch_tensor = torch.nn.functional.softmax(t_a, dim=-1) + 1e-8
+#torch_tensor = -(t_b * torch_tensor.log()).mean()
+import math
+torch_tensor = torch.nn.functional.cross_entropy(t_a, t_b.argmax(dim=-1))
+
+ts_tensor.backward()
+torch_tensor.backward()
+print(torch_tensor)
+print(ts_tensor)
+
+print(t_a.grad.numpy() / ts_a._grad)
+
+a = np.random.random((20, 10))
+b = np.zeros((20))
+b[0] = 1
+ts_a = ts.Tensor(a, requires_grad=True)
+ts_b = ts.Tensor(b)
+t_a = torch.tensor(a, requires_grad=True)
+t_b = torch.tensor(b, dtype=torch.long)
+ts_a1 = F.log_softmax(ts_a.tan().sin().cos().arctan(), dim=-1)
+ts_tensor = F.nll_loss(ts_a1, ts_b, dim=-1)
+torch_tensor = torch.nn.functional.nll_loss(
+    torch.nn.functional.log_softmax(
+        t_a.tan().sin().cos().arctan(), dim=-1), t_b)
+
+ts_tensor.backward()
+torch_tensor.backward()
+print(torch_tensor)
+print(ts_tensor)
+
+print(t_a.grad.numpy() / ts_a._grad)
+
+a = np.random.random((20, 10))
+b = np.zeros((20))
+b[0] = 1
+ts_a = ts.Tensor(a, requires_grad=True)
+ts_b = ts.Tensor(b)
+t_a = torch.tensor(a, requires_grad=True)
+t_b = torch.tensor(b, dtype=torch.long)
+ts_a1 = F.log_softmax(ts_a.arcsin().arcsinh(), dim=-1)
+ts_tensor = F.nll_loss(ts_a1, ts_b, dim=-1)
+torch_tensor = torch.nn.functional.nll_loss(
+    torch.nn.functional.log_softmax(
+        t_a.arcsin().arcsinh(), dim=-1), t_b)
+
+ts_tensor.backward()
+torch_tensor.backward()
+print(torch_tensor)
+print(ts_tensor)
+
+print(t_a.grad.numpy() / ts_a._grad)
+
+a = np.random.random((20, 10))
+b = np.zeros((20))
+b[0] = 1
+ts_a = ts.Tensor(a, requires_grad=True)
+ts_b = ts.Tensor(b)
+t_a = torch.tensor(a, requires_grad=True)
+t_b = torch.tensor(b, dtype=torch.long)
+ts_a1 = F.log_softmax(((ts_a.arctanh() / 3).arccos() + 2).arccosh(), dim=-1)
+ts_tensor = F.nll_loss(ts_a1, ts_b, dim=-1)
+torch_tensor = torch.nn.functional.nll_loss(
+    torch.nn.functional.log_softmax(
+        ((t_a.arctanh() / 3).arccos() + 2).arccosh(), dim=-1), t_b)
+
+ts_tensor.backward()
+torch_tensor.backward()
+print(torch_tensor)
+print(ts_tensor)
+
+print(t_a.grad.numpy() / ts_a._grad)

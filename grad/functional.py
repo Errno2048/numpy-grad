@@ -67,7 +67,7 @@ class _SoftmaxGrad(_UnaryGrad):
     def back(self, parent : Tensor):
         if self.a._requires_grad:
             g1 = parent._grad * parent._value
-            g2 = -parent._value * g1.sum(axis=-1, keepdims=True)
+            g2 = -parent._value * g1.sum(axis=self.dim, keepdims=True)
             self.a._grad += g1 + g2
 
 def softmax(tensor : Tensor, dim=-1):
@@ -80,6 +80,36 @@ def softmax(tensor : Tensor, dim=-1):
     res._grad_calculator = _SoftmaxGrad(tensor, dim=dim)
     return res
 
+class _LogSoftmaxGrad(_UnaryGrad):
+    def __init__(self, a, dim=-1):
+        super().__init__(a)
+        self.dim = dim
+
+    def back(self, parent : Tensor):
+        if self.a._requires_grad:
+            self.a._grad += parent._grad - np.exp(parent._value) * parent._grad.sum(axis=self.dim, keepdims=True)
+
+def log_softmax(tensor : Tensor, dim=-1):
+    res = tensor._value
+    res_max = np.max(res, axis=dim, keepdims=True)
+    res1 = res - res_max
+    res2 = np.sum(np.exp(res1), axis=dim, keepdims=True)
+    res = res1 - np.log(res2)
+    res = Tensor(res, requires_grad=tensor._requires_grad)
+    res._grad_calculator = _LogSoftmaxGrad(tensor, dim=dim)
+    return res
+
+def _reduce(input, reduction):
+    if reduction == 'sum':
+        res = input.sum()
+    elif reduction == 'mean':
+        res = input.mean()
+    elif reduction == 'batchmean':
+        res = input.mean() / input.shape[0]
+    else:
+        res = input
+    return res
+
 def cross_entropy(input, target, dim=-1, *, reduction='mean', target_type='indices'):
     q = softmax(input, dim=dim) + 1e-8
     if target_type == 'onehot':
@@ -89,10 +119,33 @@ def cross_entropy(input, target, dim=-1, *, reduction='mean', target_type='indic
         _target = Tensor.zeros_like(input)
         target = _target.gather_merge(1, dim, target.unsqueeze(-1))
     res = -(target * q.log()).sum(dim=dim)
-    if reduction == 'sum':
-        res = res.sum()
-    elif reduction == 'mean':
-        res = res.mean()
+    return _reduce(res, reduction)
+
+def kl_div(input, target, reduction='mean', log_target=False, log_input=True):
+    if not log_input:
+        input = input.log()
+    if log_target:
+        res = target.exp() * (target - input)
     else:
+        res = target * (target.log() - input)
+    return _reduce(res, reduction)
+
+def dropout(input, p=0.5):
+    assert 0.0 <= p < 1.0, 'Invalid dropout probability'
+    mask = Tensor((np.random.random(input.shape) >= p).astype(np.float_))
+    return input * mask / (1 - p)
+
+def nll_loss(input, target, dim=-1, weight=None, *, reduction='mean', target_type='indices'):
+    if target_type == 'onehot':
         pass
-    return res
+    else:
+        # indices
+        _target = Tensor.zeros_like(input)
+        target = _target.gather_merge(1, dim, target.unsqueeze(-1))
+    if weight is not None:
+        reshape = [1 for i in range(target.ndim)]
+        reshape[dim] = target.shape[dim]
+        weight = weight.reshape(*reshape)
+        target = target * weight
+    res = (-target * input).sum(dim=dim, keepdim=False)
+    return _reduce(res, reduction)

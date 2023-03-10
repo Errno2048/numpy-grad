@@ -199,4 +199,3 @@ class LayerNorm(Norm):
 
     def _norm_axes(self):
         return True, self._norm_dims
-

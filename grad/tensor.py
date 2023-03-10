@@ -251,6 +251,69 @@ class Tensor:
         res._grad_calculator = LogGrad(self)
         return res
 
+    def sin(self):
+        res = Tensor(np.sin(self._value), requires_grad=self._requires_grad)
+        res._grad_calculator = SinGrad(self)
+        return res
+
+    def cos(self):
+        res = Tensor(np.cos(self._value), requires_grad=self._requires_grad)
+        res._grad_calculator = CosGrad(self)
+        return res
+
+    def tan(self):
+        res = Tensor(np.tan(self._value), requires_grad=self._requires_grad)
+        res._grad_calculator = TanGrad(self)
+        return res
+
+    def arcsin(self):
+        res = Tensor(np.arcsin(self._value), requires_grad=self._requires_grad)
+        res._grad_calculator = ArcsinGrad(self)
+        return res
+
+    def arccos(self):
+        res = Tensor(np.arccos(self._value), requires_grad=self._requires_grad)
+        res._grad_calculator = ArccosGrad(self)
+        return res
+
+    def arctan(self):
+        res = Tensor(np.arctan(self._value), requires_grad=self._requires_grad)
+        res._grad_calculator = ArctanGrad(self)
+        return res
+
+    def sinh(self):
+        res = Tensor(np.sinh(self._value), requires_grad=self._requires_grad)
+        res._grad_calculator = SinhGrad(self)
+        return res
+
+    def cosh(self):
+        res = Tensor(np.cosh(self._value), requires_grad=self._requires_grad)
+        res._grad_calculator = CoshGrad(self)
+        return res
+
+    def tanh(self):
+        res = Tensor(np.tanh(self._value), requires_grad=self._requires_grad)
+        res._grad_calculator = TanhGrad(self)
+        return res
+
+    def arcsinh(self):
+        res = Tensor(np.arcsinh(self._value), requires_grad=self._requires_grad)
+        res._grad_calculator = ArsinhGrad(self)
+        return res
+
+    def arccosh(self):
+        res = Tensor(np.arccosh(self._value), requires_grad=self._requires_grad)
+        res._grad_calculator = ArcoshGrad(self)
+        return res
+
+    def arctanh(self):
+        res = Tensor(np.arctanh(self._value), requires_grad=self._requires_grad)
+        res._grad_calculator = ArtanhGrad(self)
+        return res
+
+    def sigmoid(self):
+        return 1 / (1 + (-self).exp())
+
     def sum(self, dim=None, keepdim=False):
         if dim is None:
             value = self._value.sum()
@@ -665,3 +728,67 @@ class ClipGrad(UnaryGrad):
         if self.a._requires_grad:
             mask = (self.a._value >= self.clip_min) & (self.a._value <= self.clip_max)
             self.a._grad += parent._grad * mask
+
+class SinGrad(UnaryGrad):
+    def back(self, parent : Tensor):
+        if self.a._requires_grad:
+            self.a._grad += parent._grad * np.cos(self.a._value)
+
+class CosGrad(UnaryGrad):
+    def back(self, parent : Tensor):
+        if self.a._requires_grad:
+            self.a._grad += parent._grad * -np.sin(self.a._value)
+
+class TanGrad(UnaryGrad):
+    def back(self, parent : Tensor):
+        if self.a._requires_grad:
+            # Might results in nan
+            self.a._grad += parent._grad / (np.cos(self.a._value) ** 2)
+
+class SinhGrad(UnaryGrad):
+    def back(self, parent : Tensor):
+        if self.a._requires_grad:
+            self.a._grad += parent._grad * np.cosh(self.a._value)
+
+class CoshGrad(UnaryGrad):
+    def back(self, parent : Tensor):
+        if self.a._requires_grad:
+            self.a._grad += parent._grad * np.sinh(self.a._value)
+
+class TanhGrad(UnaryGrad):
+    def back(self, parent : Tensor):
+        if self.a._requires_grad:
+            self.a._grad += parent._grad / (np.cosh(self.a._value) ** 2)
+
+class ArcsinGrad(UnaryGrad):
+    def back(self, parent : Tensor):
+        if self.a._requires_grad:
+            # Might results in nan
+            self.a._grad += parent._grad / np.sqrt(1 - self.a._value ** 2)
+
+class ArccosGrad(UnaryGrad):
+    def back(self, parent : Tensor):
+        if self.a._requires_grad:
+            # Might results in nan
+            self.a._grad += parent._grad / -np.sqrt(1 - self.a._value ** 2)
+
+class ArctanGrad(UnaryGrad):
+    def back(self, parent : Tensor):
+        if self.a._requires_grad:
+            self.a._grad += parent._grad / (1 + self.a._value ** 2)
+
+class ArsinhGrad(UnaryGrad):
+    def back(self, parent : Tensor):
+        if self.a._requires_grad:
+            self.a._grad += parent._grad / np.sqrt(1 + self.a._value ** 2)
+
+class ArcoshGrad(UnaryGrad):
+    def back(self, parent : Tensor):
+        if self.a._requires_grad:
+            # Might results in nan
+            self.a._grad += parent._grad / np.sqrt(self.a._value ** 2 - 1)
+
+class ArtanhGrad(UnaryGrad):
+    def back(self, parent : Tensor):
+        if self.a._requires_grad:
+            self.a._grad += parent._grad / (1 - self.a._value ** 2)
