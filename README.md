@@ -26,7 +26,7 @@ optim = Optimizer(model.parameters(), lr=1e-3)
 x = uniform(-1, 1, size=(10, 30, 20, 10))
 y = normal(0, 1, size=(10, 30, 20, 5))
 pred = model(x)
-loss = ((x - y) ** 2).mean()
+loss = ((pred - y) ** 2).mean()
 
 optim.zero_grad()
 loss.backward()
