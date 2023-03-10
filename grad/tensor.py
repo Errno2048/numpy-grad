@@ -586,7 +586,6 @@ class StackGrad(MultiGrad):
         parent_grad = _permute_to_last_dim(parent._grad, self.dim)
         for index, tensor in enumerate(self.tensors):
             if tensor._requires_grad:
-                print(parent_grad.shape, tensor._grad.shape)
                 grad = np.expand_dims(parent_grad[..., index], -1)
                 grad = _permute_to_last_dim(grad, self.dim)
                 tensor._grad += np.reshape(grad, tensor._value.shape)
