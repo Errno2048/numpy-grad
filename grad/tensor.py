@@ -213,7 +213,7 @@ class Tensor:
         self._requires_grad = value._requires_grad
         self._grad_calculator = InverseSelectGrad(value, key)
 
-    def merge(self, other, index):
+    def merge(self, index, other):
         res = self._value.copy()
         res[index] = other._value
         res = Tensor(res, requires_grad=self._requires_grad or other._requires_grad)
@@ -310,17 +310,12 @@ class Tensor:
 
     def gather(self, dim, index):
         index = self._ensure_tensor(index)
-        dim = dim % self._value.ndim
-        indices = []
-        expand = list(range(1, self._value.ndim))
-        for i in range(self._value.ndim):
-            if i == dim:
-                indices.append(index._value)
-            else:
-                indices.append(np.expand_dims(np.arange(self.shape[i]), expand))
-            if i < self._value.ndim - 1:
-                expand[i] = i
-        return self[tuple(indices)]
+        return self[_gather_indices(self._value, dim, index._value)]
+
+    def gather_merge(self, other, dim, index):
+        other = self._ensure_tensor(other)
+        index = self._ensure_tensor(index)
+        return self.merge(_gather_indices(self._value, dim, index._value), other)
 
     def to_list(self):
         return self._value.tolist()
@@ -348,6 +343,19 @@ class Tensor:
         else:
             self._grad = grad
         self._grad_cal()
+
+def _gather_indices(value, dim, index):
+    dim = dim % value.ndim
+    indices = []
+    expand = list(range(1, value.ndim))
+    for i in range(value.ndim):
+        if i == dim:
+            indices.append(index)
+        else:
+            indices.append(np.expand_dims(np.arange(value.shape[i]), expand))
+        if i < value.ndim - 1:
+            expand[i] = i
+    return tuple(indices)
 
 def _shape_list(a : np.ndarray, b : np.ndarray):
     ndim_a, ndim_b = a.ndim, b.ndim

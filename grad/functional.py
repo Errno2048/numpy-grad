@@ -68,8 +68,14 @@ def softmax(tensor : Tensor, dim=-1):
     res._grad_calculator = _SoftmaxGrad(tensor, dim=dim)
     return res
 
-def cross_entropy(input, target, dim=-1, reduction='mean'):
+def cross_entropy(input, target, dim=-1, *, reduction='mean', target_type='indices'):
     q = softmax(input, dim=dim) + 1e-8
+    if target_type == 'onehot':
+        pass
+    else:
+        # indices
+        _target = Tensor.zeros_like(input)
+        target = _target.gather_merge(1, dim, target)
     res = -(target * q.log())
     if reduction == 'sum':
         res = res.sum()
