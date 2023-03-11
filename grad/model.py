@@ -164,7 +164,7 @@ class Norm(Module):
             shape[dim] = input.shape[dim]
         estimate_mean = estimate_mean.reshape(*shape)
         estimate_var = estimate_var.reshape(*shape)
-        res = (input - estimate_mean) / (estimate_var + self._eps) ** 0.5
+        res = (input - estimate_mean) / (estimate_var + self._eps).sqrt()
         if self._affine:
             res = res * self.weight + self.bias
 

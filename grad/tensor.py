@@ -38,8 +38,8 @@ class Tensor:
         return res
 
     def __init__(self, value, requires_grad=False):
-        self._value = np.array(value)
-        self._grad = np.zeros_like(self._value)
+        self._value = np.array(value, dtype=np.float_)
+        self._grad = np.zeros_like(self._value, dtype=np.float_)
         self._grad_calculator = None
         self._requires_grad = requires_grad
 
@@ -117,26 +117,32 @@ class Tensor:
         return str(self)
 
     def __lt__(self, other):
+        other = self._ensure_tensor(other)
         value = self._value < other._value
         return Tensor(value, requires_grad=False)
 
     def __le__(self, other):
+        other = self._ensure_tensor(other)
         value = self._value <= other._value
         return Tensor(value, requires_grad=False)
 
     def __gt__(self, other):
+        other = self._ensure_tensor(other)
         value = self._value > other._value
         return Tensor(value, requires_grad=False)
 
     def __ge__(self, other):
+        other = self._ensure_tensor(other)
         value = self._value >= other._value
         return Tensor(value, requires_grad=False)
 
     def __eq__(self, other):
+        other = self._ensure_tensor(other)
         value = self._value == other._value
         return Tensor(value, requires_grad=False)
 
     def __ne__(self, other):
+        other = self._ensure_tensor(other)
         value = self._value != other._value
         return Tensor(value, requires_grad=False)
 
@@ -311,8 +317,16 @@ class Tensor:
         res._grad_calculator = ArtanhGrad(self)
         return res
 
+    def sqrt(self):
+        res = Tensor(np.sqrt(self._value), requires_grad=self._requires_grad)
+        res._grad_calculator = SqrtGrad(self)
+        return res
+
     def sigmoid(self):
-        return 1 / (1 + (-self).exp())
+        mask = self >= 0
+        exp1 = (-self * mask).exp()
+        exp2 = (self * (1 - mask)).exp()
+        return mask / (1 + exp1) + (1 - mask) * (1 - 1 / (1 + exp2))
 
     def sum(self, dim=None, keepdim=False):
         if dim is None:
@@ -346,6 +360,9 @@ class Tensor:
 
     def std(self, dim, unbiased=True, keepdim=False):
         return self.var(dim, unbiased=unbiased, keepdim=keepdim) ** 0.5
+
+    def abs(self):
+        return self.__abs__()
 
     def max(self, dim=None, keepdim=False):
         if dim is None:
@@ -792,3 +809,8 @@ class ArtanhGrad(UnaryGrad):
     def back(self, parent : Tensor):
         if self.a._requires_grad:
             self.a._grad += parent._grad / (1 - self.a._value ** 2)
+
+class SqrtGrad(UnaryGrad):
+    def back(self, parent : Tensor):
+        if self.a._requires_grad:
+            self.a._grad += parent._grad / (2 * parent._value)

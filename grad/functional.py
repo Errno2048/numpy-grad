@@ -149,3 +149,12 @@ def nll_loss(input, target, dim=-1, weight=None, *, reduction='mean', target_typ
         target = target * weight
     res = (-target * input).sum(dim=dim, keepdim=False)
     return _reduce(res, reduction)
+
+def ln_loss(input, target, n, reduction='mean'):
+    return _reduce(((input - target) ** n).abs(), reduction)
+
+def l1_loss(input, target, reduction='mean'):
+    return ln_loss(input, target, 1, reduction)
+
+def mse_loss(input, target, reduction='mean'):
+    return ln_loss(input, target, 2, reduction)
