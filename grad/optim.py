@@ -33,12 +33,13 @@ class Optimizer:
         return self.lr * tensor._grad
 
 class SGD(Optimizer):
-    def __init__(self, parameters, lr=1e-3, momentum=0.0, dampening=0.0, nesterov=False, weight_decay=0.0):
+    def __init__(self, parameters, lr=1e-3, momentum=0.0, dampening=0.0, nesterov=False, weight_decay=0.0, weight_decay_index=2):
         super().__init__(parameters, lr)
         self.momentum = momentum
         self.dampening = dampening
         self.nesterov = nesterov
         self.weight_decay = weight_decay
+        self.weight_decay_index = weight_decay_index
         self.momentum_dicts = {}
         self.reset()
 
@@ -50,7 +51,10 @@ class SGD(Optimizer):
 
     def optimize(self, name, tensor):
         grad = tensor._grad
-        grad = grad + self.weight_decay * tensor._value
+        if self.weight_decay != 0.0:
+            delta_grad = np.abs(tensor._value) ** (self.weight_decay_index - 1)
+            delta_grad = self.weight_decay_index * np.sign(tensor._value) * delta_grad
+            grad = grad + self.weight_decay * delta_grad
         if self.momentum != 0.0:
             prev_b = self.momentum_dicts.get(name, None)
             if prev_b is None:
@@ -71,7 +75,7 @@ class Adam(Optimizer):
         self.beta2 = beta2
         self.epsilon = epsilon
         self.weight_decay = weight_decay
-        self.weight_decay_index = weight_decay_index
+        self.weight_decay_index = round(weight_decay_index)
         self.momentum_dicts = {}
         self.reset()
 
@@ -95,5 +99,7 @@ class Adam(Optimizer):
         fix_v = v / (1 - self.beta2 ** t)
         res = fix_m / (np.sqrt(fix_v) + self.epsilon)
         if self.weight_decay != 0.0:
-            res = res + self.weight_decay * abs(tensor._value ** self.weight_decay_index)
+            delta_grad = np.abs(tensor._value) ** (self.weight_decay_index - 1)
+            delta_grad = self.weight_decay_index * np.sign(tensor._value) * delta_grad
+            res = res + self.weight_decay * delta_grad
         return self.lr * res
