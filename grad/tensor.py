@@ -1,4 +1,5 @@
 import numpy as np
+import itertools
 
 class Tensor:
     @classmethod
@@ -253,6 +254,13 @@ class Tensor:
         res._grad_calculator = MergeGrad(self, other, index)
         return res
 
+    def repeat(self, *repeats):
+        assert len(repeats) == self.ndim, f'size mismatch for shape {self.shape} and repeats {repeats}'
+        res = np.tile(self._value, repeats)
+        res = Tensor(res, requires_grad=self._requires_grad)
+        res._grad_calculator = RepeatGrad(self, repeats)
+        return res
+
     def exp(self):
         res = Tensor(np.exp(self._value), requires_grad=self._requires_grad)
         res._grad_calculator = ExpGrad(self)
@@ -461,6 +469,13 @@ class Tensor:
         else:
             self._grad = grad
         self._grad_cal()
+
+    def __len__(self):
+        return self.shape[0]
+
+    def __iter__(self):
+        for i in range(self.shape[0]):
+            yield self[i, ...]
 
 def _gather_indices(value, dim, index):
     dim = dim % value.ndim
@@ -707,6 +722,23 @@ class StackGrad(MultiGrad):
                 grad = np.expand_dims(parent_grad[..., index], -1)
                 grad = _permute_to_last_dim(grad, self.dim)
                 tensor._grad += np.reshape(grad, tensor._value.shape)
+
+class RepeatGrad(UnaryGrad):
+    # grad for np.tile
+    def __init__(self, a, repeats):
+        super().__init__(a)
+        self.repeats = repeats
+
+    def back(self, parent : Tensor):
+        if self.a._requires_grad:
+            new_shape = tuple(itertools.chain(zip(self.repeats, self.a.shape)))
+            grad = parent._grad
+            new_grad = np.reshape(grad, new_shape)
+            permute1, permute2 = zip(*((i, i + 1) for i in range(0, self.a.ndim * 2, 2)))
+            new_grad = np.transpose(new_grad, (*permute2, *permute1))
+            new_grad = np.reshape(new_grad, (*self.a.shape, -1))
+            new_grad = np.sum(new_grad, axis=-1)
+            self.a._grad += new_grad
 
 class SelectGrad(UnaryGrad):
     def __init__(self, a, index):

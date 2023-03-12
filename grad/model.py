@@ -1,5 +1,5 @@
 import math
-from collections.abc import Iterable
+from collections.abc import Iterable, Sized
 
 from .tensor import Tensor
 from .random import uniform
@@ -201,6 +201,15 @@ class LayerNorm(Norm):
     def _norm_axes(self):
         return True, self._norm_dims
 
+def _n_repeat(value, n):
+    if isinstance(n, Iterable):
+        return n
+    return tuple(value for i in range(n))
+
+def _check_size(value, n):
+    if isinstance(value, Iterable):
+        assert isinstance(value, Sized) and len(value) == n, f'value {value} incompatible with size {n}'
+
 class Conv(Module):
     def __init__(
         self,
@@ -231,3 +240,261 @@ class Conv(Module):
 
     def __call__(self, input):
         return F.conv(input, self.kernel, padding=self.padding, stride=self.stride, dilation=self.dilation)
+
+class _ConvNd(Conv):
+    def __init__(
+        self,
+        n,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride=1,
+        padding=0,
+        dilation=1,
+        groups=1,
+        bias=True,
+    ):
+        for v in (kernel_size, stride, padding, dilation):
+            _check_size(v, n)
+        super().__init__(
+            in_channels,
+            out_channels,
+            _n_repeat(kernel_size, n),
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            groups=groups,
+            bias=bias,
+        )
+        self._n = n
+
+    def __call__(self, input):
+        assert input.ndim in (self._n + 1, self._n + 2), f'input shape {input.shape} incompatible with {self._n}'
+        return super().__call__(input)
+
+class Conv1d(_ConvNd):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride=1,
+        padding=0,
+        dilation=1,
+        groups=1,
+        bias=True,
+    ):
+        super().__init__(
+            1, in_channels, out_channels, kernel_size,
+            stride=stride, padding=padding, dilation=dilation, groups=groups, bias=bias,
+        )
+
+class Conv2d(_ConvNd):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride=1,
+        padding=0,
+        dilation=1,
+        groups=1,
+        bias=True,
+    ):
+        super().__init__(
+            2, in_channels, out_channels, kernel_size,
+            stride=stride, padding=padding, dilation=dilation, groups=groups, bias=bias,
+        )
+
+class Conv3d(_ConvNd):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride=1,
+        padding=0,
+        dilation=1,
+        groups=1,
+        bias=True,
+    ):
+        super().__init__(
+            3, in_channels, out_channels, kernel_size,
+            stride=stride, padding=padding, dilation=dilation, groups=groups, bias=bias,
+        )
+
+# RNNs are from pytorch
+class _RNNCellBase(Module):
+    def __init__(self, input_size, hidden_size, bias=True, num_chunks=1):
+        super().__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.bias = bias
+
+        stdv = 1.0 / math.sqrt(self.hidden_size) if self.hidden_size > 0 else 0
+        self.weight_ih = uniform(-stdv, stdv, (input_size, num_chunks * hidden_size), requires_grad=True)
+        self.weight_hh = uniform(-stdv, stdv, (hidden_size, num_chunks * hidden_size), requires_grad=True)
+        self.register('weight_ih')
+        self.register('weight_hh')
+        if bias:
+            self.bias_ih = uniform(-stdv, stdv, (num_chunks * hidden_size, ), requires_grad=True)
+            self.bias_hh = uniform(-stdv, stdv, (num_chunks * hidden_size, ), requires_grad=True)
+            self.register('bias_ih')
+            self.register('bias_hh')
+        else:
+            self.bias_ih = None
+            self.bias_hh = None
+
+def _rnn_base_cal(input : Tensor, hx, weight_ih, weight_hh, bias_ih, bias_hh):
+    res = input @ weight_ih + hx @ weight_hh
+    if bias_ih is not None:
+        res = res + bias_ih
+    if bias_hh is not None:
+        res = res + bias_hh
+    return res
+
+class RNNCell(_RNNCellBase):
+    def __init__(self, input_size, hidden_size, bias=True, nonlinearity="tanh"):
+        super().__init__(input_size, hidden_size, bias=bias, num_chunks=1)
+        self.nonlinearity = nonlinearity
+
+    def __call__(self, input : Tensor, hx = None):
+        assert input.dim() in (1, 2), \
+            f"RNNCell: Expected input to be 1-D or 2-D but received {input.dim()}-D tensor"
+        is_batched = input.ndim == 2
+        if not is_batched:
+            input = input.unsqueeze(0)
+
+        if hx is None:
+            hx = Tensor.zeros(input.shape[0], self.hidden_size)
+        else:
+            hx = hx.unsqueeze(0) if not is_batched else hx
+
+        res = _rnn_base_cal(input, hx, self.weight_ih, self.weight_hh, self.bias_ih, self.bias_hh)
+
+        if self.nonlinearity == "tanh":
+            res = res.tanh()
+        elif self.nonlinearity == "relu":
+            res = F.relu(res)
+        else:
+            raise RuntimeError(
+                "Unknown nonlinearity: {}".format(self.nonlinearity))
+
+        if not is_batched:
+            res = res.squeeze(0)
+
+        return res
+
+class LSTMCell(_RNNCellBase):
+    def __init__(self, input_size, hidden_size, bias=True):
+        super().__init__(input_size, hidden_size, bias=bias, num_chunks=4)
+
+    def forward(self, input : Tensor, hx=None):
+        assert input.dim() in (1, 2), \
+            f"LSTMCell: Expected input to be 1-D or 2-D but received {input.dim()}-D tensor"
+        is_batched = input.dim() == 2
+        if not is_batched:
+            input = input.unsqueeze(0)
+
+        if hx is None:
+            zeros = Tensor.zeros(input.size(0), self.hidden_size)
+            hx = (zeros, zeros)
+        else:
+            hx = (hx[0].unsqueeze(0), hx[1].unsqueeze(0)) if not is_batched else hx
+
+        hx, cx = hx
+
+        res = _rnn_base_cal(input, hx, self.weight_ih, self.weight_hh, self.bias_ih, self.bias_hh)
+        res = res.reshape(*res.shape[:-1], res.shape[-1] // 4, 4)
+        i, f, g, o = res[..., 0], res[..., 1], res[..., 2], res[..., 3]
+        i, f, g, o = i.sigmoid(), f.sigmoid(), g.tanh(), o.sigmoid()
+        c = f * cx + i * g
+        h = o * c.tanh()
+        res = (h, c)
+
+        if not is_batched:
+            res = (res[0].squeeze(0), res[1].squeeze(0))
+        return res
+
+class GRUCell(_RNNCellBase):
+    def __init__(self, input_size, hidden_size, bias=True):
+        super().__init__(input_size, hidden_size, bias=bias, num_chunks=3)
+
+    def forward(self, input : Tensor, hx = None):
+        assert input.dim() in (1, 2), \
+            f"GRUCell: Expected input to be 1-D or 2-D but received {input.dim()}-D tensor"
+        is_batched = input.dim() == 2
+        if not is_batched:
+            input = input.unsqueeze(0)
+
+        if hx is None:
+            hx = Tensor.zeros(input.size(0), self.hidden_size)
+        else:
+            hx = hx.unsqueeze(0) if not is_batched else hx
+
+        weight_ih = self.weight_ih.reshape(*self.weight_ih.shape[:-1], self.weight_ih.shape[-1] // 3, 3)
+        weight_hh = self.weight_hh.reshape(*self.weight_ih.shape[:-1], self.weight_ih.shape[-1] // 3, 3)
+        w_ir, w_iz, w_in = weight_ih[..., 0], weight_ih[..., 1], weight_ih[..., 2]
+        w_hr, w_hz, w_hn = weight_hh[..., 0], weight_hh[..., 1], weight_hh[..., 2]
+        if self.bias_ih:
+            bias_ih = self.bias_ih.reshape(*self.bias_ih.shape[:-1], self.bias_ih.shape[-1] // 3, 3)
+            b_ir, b_iz, b_in = bias_ih[..., 0], bias_ih[..., 1], bias_ih[..., 2]
+        else:
+            b_ir, b_iz, b_in = None, None, None
+        if self.bias_hh:
+            bias_hh = self.bias_hh.reshape(*self.bias_hh.shape[:-1], self.bias_hh.shape[-1] // 3, 3)
+            b_hr, b_hz, b_hn = bias_hh[..., 0], bias_hh[..., 1], bias_hh[..., 2]
+        else:
+            b_hr, b_hz, b_hn = None, None, None
+
+        r = _rnn_base_cal(input, hx, w_ir, w_hr, b_ir, b_hr).sigmoid()
+        z = _rnn_base_cal(input, hx, w_iz, w_hz, b_iz, b_hz).sigmoid()
+        if b_hn is not None:
+            _v = r * (hx @ w_hn)
+        else:
+            _v = r * (hx @ w_hn + b_hn)
+        n = input @ w_in + _v
+        if b_in is not None:
+            n = n + b_in
+        n = n.tanh()
+
+        res = (1 - z) * n + z * hx
+
+        if not is_batched:
+            res = res.squeeze(0)
+
+        return res
+
+class _RNNBase(Module):
+    def __init__(
+        self,
+        unit : type,
+        input_size,
+        hidden_size,
+        num_layers=1,
+        bias=True,
+        batch_first=False,
+        dropout=0.0,
+        bidirectional=False,
+        *args, **kwargs,
+    ):
+        super().__init__()
+        self.num_layers = num_layers
+        self.bidirectional = bidirectional
+        self.batch_first = batch_first
+        self.dropout = dropout
+
+        unit_gen = lambda: unit(input_size, hidden_size, bias, *args, **kwargs)
+        bi_unit_gen = lambda: (unit_gen(), unit_gen()) if bidirectional else unit_gen()
+        self.units = [bi_unit_gen() for i in range(num_layers)]
+        for i, unit in enumerate(self.units):
+            if bidirectional:
+                unit1, unit2 = unit
+                self.register(f'unit{i}_1', unit1)
+                self.register(f'unit{i}_2', unit2)
+            else:
+                self.register(f'unit{i}', unit)
+
+    def __call__(self, input, hx = None):
+        # TODO:
+        pass
