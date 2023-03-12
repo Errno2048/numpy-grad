@@ -2,8 +2,8 @@ import math
 from collections.abc import Iterable
 
 from .tensor import Tensor
-from .functional import xavier_uniform_, relu, softmax
 from .random import uniform
+from . import functional as F
 
 class Module:
     def __init__(self):
@@ -39,10 +39,11 @@ class Linear(Module):
         super().__init__()
         self.weight = Tensor.zeros(input_size, output_size, requires_grad=True)
         self.register('weight')
-        xavier_uniform_(self.weight)
+        F.kaiming_uniform_(self.weight, a=math.sqrt(5))
 
         if bias:
-            bound = 1 / math.sqrt(output_size)
+            fan_in, _  = F._calculate_fan_in_and_fan_out(self.weight)
+            bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
             self.bias = uniform(-bound, bound, (output_size, ), requires_grad=True)
             self.register('bias')
         else:
@@ -56,7 +57,7 @@ class Linear(Module):
 
 class ReLU(Module):
     def __call__(self, input):
-        return relu(input)
+        return F.relu(input)
 
 class Softmax(Module):
     def __init__(self, dim=None):
@@ -64,7 +65,7 @@ class Softmax(Module):
         self.dim = dim
 
     def __call__(self, input):
-        return softmax(input, self.dim)
+        return F.softmax(input, self.dim)
 
 class Sequential(Module):
     def __init__(self, *models):
@@ -199,3 +200,34 @@ class LayerNorm(Norm):
 
     def _norm_axes(self):
         return True, self._norm_dims
+
+class Conv(Module):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride=1,
+        padding=0,
+        dilation=1,
+        groups=1,
+        bias=True,
+    ):
+        super().__init__()
+        self.kernel = Tensor.zeros(out_channels, in_channels // groups, *kernel_size, requires_grad=True)
+        self.register('kernel')
+        F.kaiming_uniform_(self.kernel, a=math.sqrt(5))
+        if bias:
+            fan_in, _ = F._calculate_fan_in_and_fan_out(self.kernel)
+            bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+            self.bias = uniform(-bound, bound, (out_channels, ), requires_grad=True)
+            self.register('bias')
+        else:
+            self.bias = None
+        self.stride = stride
+        self.padding = padding
+        self.dilation = dilation
+        self.groups = groups
+
+    def __call__(self, input):
+        return F.conv(input, self.kernel, padding=self.padding, stride=self.stride, dilation=self.dilation)

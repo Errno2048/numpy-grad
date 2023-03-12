@@ -24,6 +24,12 @@ class Tensor:
         return cls(np.ones_like(tensor._value), requires_grad=requires_grad)
 
     @classmethod
+    def eye(cls, row, column=None, diagonal=0, *, row_major=True, requires_grad=False):
+        if column is None:
+            column = row
+        return cls(np.eye(row, column, diagonal, order='C' if row_major else 'F'), requires_grad=requires_grad)
+
+    @classmethod
     def cat(cls, tensors, dim=0):
         res = np.concatenate([t._value for t in tensors], axis=dim)
         res = cls(res, requires_grad=(sum((t._requires_grad for t in tensors)) > 0))

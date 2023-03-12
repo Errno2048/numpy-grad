@@ -1,7 +1,7 @@
 # numpy-grad
  A toy deep learning tool for homework.
 
-I'm looking for a method to implement convolutions without the terribly slow for loops in python. (It seems that `numpy.lib.stride_tricks.as_strided` helps to convert the problem to simply doing production, but stride and dilation are difficult to implement. Are there better ideas?)
+- 2023/03/12 update: Complete implementation of convolutions. I wonder if there are tricky ways to implement RNNs as well without for-loops?
 
 ```python
 from grad.tensor import Tensor

@@ -287,3 +287,59 @@ print(torch_tensor)
 print(ts_tensor)
 
 print(t_a.grad.numpy() / ts_a._grad)
+
+a = 2 * (np.random.random((20, 10)) - 0.5)
+b = np.zeros((20))
+b[0] = 1
+ts_a = ts.Tensor(a, requires_grad=True)
+ts_b = ts.Tensor(b)
+t_a = torch.tensor(a, requires_grad=True)
+t_b = torch.tensor(b, dtype=torch.long)
+ts_a1 = F.log_softmax(ts_a.sigmoid().sqrt() ** 2.718281828459045, dim=-1)
+ts_tensor = F.nll_loss(ts_a1, ts_b, dim=-1)
+torch_tensor = torch.nn.functional.nll_loss(
+    torch.nn.functional.log_softmax(
+        t_a.sigmoid().sqrt() ** 2.718281828459045, dim=-1), t_b)
+
+ts_tensor.backward()
+torch_tensor.backward()
+print(torch_tensor)
+print(ts_tensor)
+
+print(t_a.grad.numpy() / ts_a._grad)
+
+from lib.conv import _np_conv
+
+in_channels = 30
+out_channels = 15
+groups = 3
+a = np.random.normal(0, 1.0, (16, in_channels, 15, 15, 15)) # N, C, H, W
+b = np.random.normal(0, 1.0, (out_channels, in_channels // groups, 3, 3, 5))
+t_a = torch.tensor(a)
+t_b = torch.tensor(b)
+conv_res = _np_conv(a, b, padding=3, stride=2, dilation=2)
+torch_conv_res = torch.nn.functional.conv3d(t_a, t_b, padding=3, stride=2, dilation=2, groups=groups)
+
+print(torch_conv_res.numpy() / conv_res)
+
+print('------------conv test')
+
+in_channels = 15
+out_channels = 6
+groups = 3
+a = np.random.normal(0, 1.0, (4, in_channels, 15, 15, 15)) # N, C, H, W
+b = np.random.normal(0, 1.0, (out_channels, in_channels // groups, 3, 5, 7))
+ts_a = ts.Tensor(a, requires_grad=True)
+ts_b = ts.Tensor(b, requires_grad=True)
+t_a = torch.tensor(a, requires_grad=True)
+t_b = torch.tensor(b, requires_grad=True)
+conv_res = F.conv(ts_a, ts_b, padding=3, stride=2, dilation=2)
+torch_conv_res = torch.nn.functional.conv3d(t_a, t_b, padding=3, stride=2, dilation=2, groups=groups)
+conv_tail = conv_res.mean()
+torch_conv_tail = torch_conv_res.mean()
+
+conv_tail.backward()
+torch_conv_tail.backward()
+
+print((t_a.grad.numpy() - ts_a._grad).sum())
+print((t_b.grad.numpy() - ts_b._grad).sum())
